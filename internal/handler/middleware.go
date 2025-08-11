@@ -51,6 +51,12 @@ func (h Handler) CreateCustomerIfNotExistMiddleware(next bot.HandlerFunc) bot.Ha
 			}
 		}
 
+		if existingCustomer != nil {
+		    h.announcementService.SendActiveAnnouncementsToNewUser(ctx, telegramId, existingCustomer.ID)
+		} else {
+		    slog.Error("Customer is nil when trying to send announcements")
+		}
+
 		next(ctx, b, update)
 	}
 }
