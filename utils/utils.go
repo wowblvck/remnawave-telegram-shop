@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"fmt"
+	"remnawave-tg-shop-bot/internal/translation"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func MaskHalfInt(input int) string {
@@ -24,4 +27,51 @@ func MaskHalf(input string) string {
 	visibleLength := length / 2
 	maskedLength := length - visibleLength
 	return input[:visibleLength] + strings.Repeat("*", maskedLength)
+}
+
+func FormatDateByLanguage(date time.Time, langCode string) string {
+	tm := translation.GetInstance()
+
+	monthKeys := []string{
+		"month_january", "month_february", "month_march", "month_april",
+		"month_may", "month_june", "month_july", "month_august",
+		"month_september", "month_october", "month_november", "month_december",
+	}
+
+	monthName := tm.GetText(langCode, monthKeys[date.Month()-1])
+
+	if langCode == "ru" {
+		return fmt.Sprintf("%d %s %d (%02d:%02d)",
+			date.Day(), monthName, date.Year(), date.Hour(), date.Minute())
+	}
+
+	return fmt.Sprintf("%s %d, %d (%02d:%02d)",
+		monthName, date.Day(), date.Year(), date.Hour(), date.Minute())
+}
+
+func FormatDuration(d time.Duration) string {
+	d = d.Round(time.Minute)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+
+	var parts []string
+
+	if h > 0 {
+		if h == 1 {
+			parts = append(parts, "1 час")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d часов", h))
+		}
+	}
+
+	if m > 0 {
+		if m == 1 {
+			parts = append(parts, "1 минута")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d минут", m))
+		}
+	}
+
+	return strings.Join(parts, " ")
 }
