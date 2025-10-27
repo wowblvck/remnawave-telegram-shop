@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"log/slog"
 	"remnawave-tg-shop-bot/utils"
 	"time"
+
+	sq "github.com/Masterminds/squirrel"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type CustomerRepository struct {
@@ -331,4 +332,41 @@ func (cr *CustomerRepository) DeleteByNotInTelegramIds(ctx context.Context, tele
 
 	return nil
 
+}
+
+func (cr *CustomerRepository) FindAll(ctx context.Context) (*[]Customer, error) {
+	query := `
+		SELECT id, telegram_id, expire_at, created_at, subscription_link, language
+		FROM customer
+		ORDER BY created_at DESC
+	`
+
+	rows, err := cr.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query customers: %w", err)
+	}
+	defer rows.Close()
+
+	var customers []Customer
+	for rows.Next() {
+		var customer Customer
+		err := rows.Scan(
+			&customer.ID,
+			&customer.TelegramID,
+			&customer.ExpireAt,
+			&customer.CreatedAt,
+			&customer.SubscriptionLink,
+			&customer.Language,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan customer: %w", err)
+		}
+		customers = append(customers, customer)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	return &customers, nil
 }

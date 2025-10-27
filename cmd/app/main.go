@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"remnawave-tg-shop-bot/internal/announcement"
 	"remnawave-tg-shop-bot/internal/cache"
 	"remnawave-tg-shop-bot/internal/config"
 	"remnawave-tg-shop-bot/internal/cryptopay"
@@ -55,6 +56,7 @@ func main() {
 	customerRepository := database.NewCustomerRepository(pool)
 	purchaseRepository := database.NewPurchaseRepository(pool)
 	referralRepository := database.NewReferralRepository(pool)
+	announcementRepository := database.NewAnnouncementRepository(pool)
 
 	cryptoPayClient := cryptopay.NewCryptoPayClient(config.CryptoPayUrl(), config.CryptoPayToken())
 	remnawaveClient := remnawave.NewClient(config.RemnawaveUrl(), config.RemnawaveToken(), config.RemnawaveMode())
@@ -80,7 +82,9 @@ func main() {
 
 	syncService := sync.NewSyncService(remnawaveClient, customerRepository)
 
-	h := handler.NewHandler(syncService, paymentService, tm, customerRepository, purchaseRepository, cryptoPayClient, yookasaClient, referralRepository, cache)
+	announcementService := announcement.NewAnnouncementService(announcementRepository, customerRepository, b)
+
+	h := handler.NewHandler(syncService, paymentService, announcementService, tm, customerRepository, purchaseRepository, cryptoPayClient, yookasaClient, referralRepository, cache)
 
 	me, err := b.GetMe(ctx)
 	if err != nil {
@@ -127,6 +131,11 @@ func main() {
 
 	b.RegisterHandler(bot.HandlerTypeCallbackQueryData, handler.CallbackInstallGuide, bot.MatchTypePrefix, h.InstallGuideCallbackHandler, h.SuspiciousUserFilterMiddleware, h.CreateCustomerIfNotExistMiddleware)
 
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/announce", bot.MatchTypePrefix, h.CreateAnnouncementCommandHandler, isAdminMiddleware)
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/delete_announcement", bot.MatchTypePrefix, h.DeleteAnnouncementCommandHandler, isAdminMiddleware)
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/list_announcements", bot.MatchTypeExact, h.ListAnnouncementsCommandHandler, isAdminMiddleware)
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/delete_all_announcements", bot.MatchTypeExact, h.DeleteAllAnnouncementsCommandHandler, isAdminMiddleware)
+
 	b.RegisterHandlerMatchFunc(func(update *models.Update) bool {
 		return update.PreCheckoutQuery != nil
 	}, h.PreCheckoutCallbackHandler, h.SuspiciousUserFilterMiddleware, h.CreateCustomerIfNotExistMiddleware)
@@ -134,6 +143,10 @@ func main() {
 	b.RegisterHandlerMatchFunc(func(update *models.Update) bool {
 		return update.Message != nil && update.Message.SuccessfulPayment != nil
 	}, h.SuccessPaymentHandler, h.SuspiciousUserFilterMiddleware)
+
+	announcementCleanupCron := setupAnnouncementCleanup(announcementService)
+	announcementCleanupCron.Start()
+	defer announcementCleanupCron.Stop()
 
 	mux := http.NewServeMux()
 	mux.Handle("/healthcheck", fullHealthHandler(pool, remnawaveClient))
@@ -380,4 +393,21 @@ func checkCryptoPayInvoice(
 
 		}
 	}
+}
+
+func setupAnnouncementCleanup(announcementService *announcement.AnnouncementService) *cron.Cron {
+	c := cron.New()
+
+	_, err := c.AddFunc("0 * * * *", func() { // каждый час
+		ctx := context.Background()
+		err := announcementService.CleanupExpiredAnnouncements(ctx)
+		if err != nil {
+			slog.Error("Error cleaning up expired announcements", "error", err)
+		}
+	})
+
+	if err != nil {
+		panic(err)
+	}
+	return c
 }

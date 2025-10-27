@@ -9,7 +9,7 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-func (h Handler) InstallGuideCallbackHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+func (h *Handler) InstallGuideCallbackHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	langCode := update.CallbackQuery.From.LanguageCode
 	callbackMessage := update.CallbackQuery.Message.Message
 
