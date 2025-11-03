@@ -396,9 +396,9 @@ func checkCryptoPayInvoice(
 }
 
 func setupAnnouncementCleanup(announcementService *announcement.AnnouncementService) *cron.Cron {
-	c := cron.New()
+	c := cron.New(cron.WithSeconds())
 
-	_, err := c.AddFunc("0 * * * *", func() { // каждый час
+	_, err := c.AddFunc("*/5 * * * * *", func() {
 		ctx := context.Background()
 		err := announcementService.CleanupExpiredAnnouncements(ctx)
 		if err != nil {

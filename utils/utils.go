@@ -48,3 +48,30 @@ func FormatDateByLanguage(date time.Time, langCode string) string {
 	return fmt.Sprintf("%s %d, %d (%02d:%02d)",
 		monthName, date.Day(), date.Year(), date.Hour(), date.Minute())
 }
+
+func FormatDuration(d time.Duration) string {
+	d = d.Round(time.Minute)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+
+	var parts []string
+
+	if h > 0 {
+		if h == 1 {
+			parts = append(parts, "1 час")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d часов", h))
+		}
+	}
+
+	if m > 0 {
+		if m == 1 {
+			parts = append(parts, "1 минута")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d минут", m))
+		}
+	}
+
+	return strings.Join(parts, " ")
+}

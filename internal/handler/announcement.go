@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"remnawave-tg-shop-bot/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +33,7 @@ func (h *Handler) CreateAnnouncementCommandHandler(ctx context.Context, b *bot.B
 	}
 
 	args := parts[1]
-	title, message, hours, err := h.parseAnnouncementArgs(args, langCode)
+	title, message, duration, err := h.parseAnnouncementArgs(args, langCode)
 	if err != nil {
 		b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: update.Message.Chat.ID,
@@ -42,8 +43,8 @@ func (h *Handler) CreateAnnouncementCommandHandler(ctx context.Context, b *bot.B
 	}
 
 	var expiresAt *time.Time
-	if hours > 0 {
-		expiry := time.Now().Add(time.Duration(hours) * time.Hour)
+	if duration > 0 {
+		expiry := time.Now().Add(duration)
 		expiresAt = &expiry
 	}
 
@@ -59,7 +60,7 @@ func (h *Handler) CreateAnnouncementCommandHandler(ctx context.Context, b *bot.B
 
 	var expiryText string
 	if expiresAt != nil {
-		expiryText = fmt.Sprintf(h.translation.GetText(langCode, "announce_expiry_time"), hours)
+		expiryText = fmt.Sprintf(h.translation.GetText(langCode, "announce_expiry_time"), utils.FormatDuration(duration))
 	} else {
 		expiryText = h.translation.GetText(langCode, "announce_permanent")
 	}
@@ -206,7 +207,7 @@ func (h *Handler) DeleteAllAnnouncementsCommandHandler(ctx context.Context, b *b
 	})
 }
 
-func (h *Handler) parseAnnouncementArgs(args string, langCode string) (title, message string, hours int, err error) {
+func (h *Handler) parseAnnouncementArgs(args string, langCode string) (title, message string, duration time.Duration, err error) {
 	var parts []string
 	var current strings.Builder
 	inQuotes := false
@@ -267,12 +268,11 @@ func (h *Handler) parseAnnouncementArgs(args string, langCode string) (title, me
 	}
 
 	if len(parts) > 2 {
-		hour, parseErr := strconv.Atoi(parts[2])
-		if parseErr != nil {
-			return "", "", 0, fmt.Errorf(h.translation.GetText(langCode, "announce_parse_error_invalid_hours"), parts[2])
+		duration, err = time.ParseDuration(parts[2])
+		if err != nil {
+			return "", "", 0, fmt.Errorf(h.translation.GetText(langCode, "announce_parse_error_invalid_duration"), parts[2])
 		}
-		hours = hour
 	}
 
-	return title, message, hours, nil
+	return title, message, duration, nil
 }

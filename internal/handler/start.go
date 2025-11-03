@@ -105,6 +105,8 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 	if err != nil {
 		slog.Error("Error sending /start message", err)
 	}
+
+	h.announcementService.SendActiveAnnouncementsToNewUser(ctx, update.Message.From.ID, existingCustomer.ID)
 }
 
 func (h Handler) StartCallbackHandler(ctx context.Context, b *bot.Bot, update *models.Update) {

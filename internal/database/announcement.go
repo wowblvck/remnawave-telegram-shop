@@ -83,10 +83,30 @@ func (r *AnnouncementRepository) DeactivateAnnouncement(ctx context.Context, id 
 	return err
 }
 
-func (r *AnnouncementRepository) DeactivateExpiredAnnouncements(ctx context.Context) error {
-	query := `UPDATE announcement SET is_active = false WHERE expires_at IS NOT NULL AND expires_at <= NOW() AND is_active = true`
-	_, err := r.pool.Exec(ctx, query)
-	return err
+func (r *AnnouncementRepository) DeactivateExpiredAnnouncements(ctx context.Context) ([]int64, error) {
+	query := `
+		UPDATE announcement 
+		SET is_active = false 
+		WHERE expires_at IS NOT NULL AND expires_at <= NOW() AND is_active = true
+		RETURNING id
+	`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var expiredIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		expiredIDs = append(expiredIDs, id)
+	}
+
+	return expiredIDs, nil
 }
 
 func (r *AnnouncementRepository) RecordDelivery(ctx context.Context, delivery *AnnouncementDelivery) error {

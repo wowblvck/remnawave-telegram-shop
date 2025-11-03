@@ -50,6 +50,8 @@ func (h Handler) CreateCustomerIfNotExistMiddleware(next bot.HandlerFunc) bot.Ha
 			}
 		}
 
+		h.announcementService.SendActiveAnnouncementsToNewUser(ctx, update.Message.From.ID, existingCustomer.ID)
+
 		next(ctx, b, update)
 	}
 }
