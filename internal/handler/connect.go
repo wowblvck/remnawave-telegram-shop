@@ -20,7 +20,7 @@ import (
 func (h Handler) ConnectCommandHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	customer, err := h.customerRepository.FindByTelegramId(ctx, update.Message.Chat.ID)
 	if err != nil {
-		slog.Error("Error finding customer", err)
+		slog.Error("Error finding customer", "error", err)
 		return
 	}
 	if customer == nil {
@@ -47,7 +47,7 @@ func (h Handler) ConnectCommandHandler(ctx context.Context, b *bot.Bot, update *
 	})
 
 	if err != nil {
-		slog.Error("Error sending connect message", err)
+		slog.Error("Error sending connect message", "error", err)
 	}
 }
 
@@ -56,7 +56,7 @@ func (h Handler) ConnectCallbackHandler(ctx context.Context, b *bot.Bot, update 
 
 	customer, err := h.customerRepository.FindByTelegramId(ctx, callback.Chat.ID)
 	if err != nil {
-		slog.Error("Error finding customer", err)
+		slog.Error("Error finding customer", "error", err)
 		return
 	}
 	if customer == nil {
@@ -93,7 +93,7 @@ func (h Handler) ConnectCallbackHandler(ctx context.Context, b *bot.Bot, update 
 	})
 
 	if err != nil {
-		slog.Error("Error sending connect message", err)
+		slog.Error("Error sending connect message", "error", err)
 	}
 }
 

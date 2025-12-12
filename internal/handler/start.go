@@ -23,7 +23,7 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 	langCode := update.Message.From.LanguageCode
 	existingCustomer, err := h.customerRepository.FindByTelegramId(ctx, update.Message.Chat.ID)
 	if err != nil {
-		slog.Error("error finding customer by telegram id", err)
+		slog.Error("error finding customer by telegram id", "error", err)
 		return
 	}
 
@@ -33,7 +33,7 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 			Language:   langCode,
 		})
 		if err != nil {
-			slog.Error("error creating customer", err)
+			slog.Error("error creating customer", "error", err)
 			return
 		}
 
@@ -43,14 +43,14 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 				code := strings.TrimPrefix(arg, "ref_")
 				referrerId, err := strconv.ParseInt(code, 10, 64)
 				if err != nil {
-					slog.Error("error parsing referrer id", err)
+					slog.Error("error parsing referrer id", "error", err)
 					return
 				}
 				_, err = h.customerRepository.FindByTelegramId(ctx, referrerId)
 				if err == nil {
 					_, err := h.referralRepository.Create(ctx, referrerId, existingCustomer.TelegramID)
 					if err != nil {
-						slog.Error("error creating referral", err)
+						slog.Error("error creating referral", "error", err)
 						return
 					}
 					slog.Info("referral created", "referrerId", utils.MaskHalfInt64(referrerId), "refereeId", utils.MaskHalfInt64(existingCustomer.TelegramID))
@@ -64,7 +64,7 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 
 		err = h.customerRepository.UpdateFields(ctx, existingCustomer.ID, updates)
 		if err != nil {
-			slog.Error("Error updating customer", err)
+			slog.Error("Error updating customer", "error", err)
 			return
 		}
 	}
@@ -80,7 +80,7 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 	})
 
 	if err != nil {
-		slog.Error("Error sending removing reply keyboard", err)
+		slog.Error("Error sending removing reply keyboard", "error", err)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 	})
 
 	if err != nil {
-		slog.Error("Error deleting message", err)
+		slog.Error("Error deleting message", "error", err)
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h Handler) StartCommandHandler(ctx context.Context, b *bot.Bot, update *mo
 		Text: h.translation.GetText(langCode, "greeting"),
 	})
 	if err != nil {
-		slog.Error("Error sending /start message", err)
+		slog.Error("Error sending /start message", "error", err)
 	}
 
 	if existingCustomer != nil {
@@ -122,7 +122,7 @@ func (h Handler) StartCallbackHandler(ctx context.Context, b *bot.Bot, update *m
 
 	existingCustomer, err := h.customerRepository.FindByTelegramId(ctxWithTime, callback.From.ID)
 	if err != nil {
-		slog.Error("error finding customer by telegram id", err)
+		slog.Error("error finding customer by telegram id", "error", err)
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h Handler) StartCallbackHandler(ctx context.Context, b *bot.Bot, update *m
 		Text: h.translation.GetText(langCode, "greeting"),
 	})
 	if err != nil {
-		slog.Error("Error sending /start message", err)
+		slog.Error("Error sending /start message", "error", err)
 	}
 }
 
