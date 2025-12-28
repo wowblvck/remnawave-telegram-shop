@@ -2,6 +2,7 @@ package moynalog
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,10 +36,17 @@ type Client struct {
 
 func NewClient(baseURL, username, password string) (*Client, error) {
 	c := &Client{
-		httpClient: &http.Client{},
-		baseURL:    baseURL,
-		username:   username,
-		password:   password,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        10,
+				IdleConnTimeout:     90 * time.Second,
+				TLSHandshakeTimeout: 10 * time.Second,
+			},
+		},
+		baseURL:  baseURL,
+		username: username,
+		password: password,
 	}
 	c.authCond = sync.NewCond(&c.authMu)
 
@@ -53,25 +61,24 @@ func NewClient(baseURL, username, password string) (*Client, error) {
 
 func (c *Client) authenticate() error {
 	c.authMu.Lock()
+	defer c.authMu.Unlock()
 
 	for c.authInFlight {
 		c.authCond.Wait()
 	}
 
 	if c.token.Load().(string) != "" {
-		c.authMu.Unlock()
 		return nil
 	}
 
 	c.authInFlight = true
+
 	c.authMu.Unlock()
-
 	err := c.authenticateOnce()
-
 	c.authMu.Lock()
+
 	c.authInFlight = false
 	c.authCond.Broadcast()
-	c.authMu.Unlock()
 
 	return err
 }
@@ -119,11 +126,11 @@ func (c *Client) authenticateOnce() error {
 	return nil
 }
 
-func (c *Client) CreateIncome(amount float64, comment string) (*CreateIncomeResponse, error) {
+func (c *Client) CreateIncome(ctx context.Context, amount float64, comment string) (*CreateIncomeResponse, error) {
 	const (
 		maxRetries     = 3
 		baseDelay      = 500 * time.Millisecond
-		maxAuthRetries = 1
+		maxAuthRetries = 2
 	)
 
 	var (
@@ -132,7 +139,13 @@ func (c *Client) CreateIncome(amount float64, comment string) (*CreateIncomeResp
 	)
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		resp, err := c.createIncomeOnce(amount, comment)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		resp, err := c.createIncomeOnce(ctx, amount, comment)
 		if err == nil {
 			return resp, nil
 		}
@@ -149,6 +162,7 @@ func (c *Client) CreateIncome(amount float64, comment string) (*CreateIncomeResp
 			}
 
 			authRetries++
+			attempt--
 			continue
 		}
 
@@ -157,19 +171,24 @@ func (c *Client) CreateIncome(amount float64, comment string) (*CreateIncomeResp
 		}
 
 		lastErr = err
-		time.Sleep(baseDelay * time.Duration(1<<(attempt-1)))
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(baseDelay * time.Duration(1<<(attempt-1))):
+		}
 	}
 
 	return nil, fmt.Errorf("create income failed after retries: %w", lastErr)
 }
 
-func (c *Client) createIncomeOnce(amount float64, comment string) (*CreateIncomeResponse, error) {
+func (c *Client) createIncomeOnce(ctx context.Context, amount float64, comment string) (*CreateIncomeResponse, error) {
 	incomeURL := fmt.Sprintf("%s/income", c.baseURL)
-	formattedTime := getFormattedTime()
+	now := time.Now()
 
 	reqBody, err := json.Marshal(CreateIncomeRequest{
-		OperationTime: parseTimeString(formattedTime),
-		RequestTime:   parseTimeString(formattedTime),
+		OperationTime: now,
+		RequestTime:   now,
 		Services: []Service{
 			{
 				Name:     comment,
@@ -188,7 +207,7 @@ func (c *Client) createIncomeOnce(amount float64, comment string) (*CreateIncome
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", incomeURL, bytes.NewBuffer(reqBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", incomeURL, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +217,6 @@ func (c *Client) createIncomeOnce(amount float64, comment string) (*CreateIncome
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 YaBrowser/24.12.0.0 Safari/537.36")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -229,19 +247,4 @@ func (c *Client) createIncomeOnce(amount float64, comment string) (*CreateIncome
 	}
 
 	return &incomeResp, nil
-}
-
-func parseTimeString(timeStr string) time.Time {
-	t, err := time.Parse("2006-01-02T15:04:05-07:00", timeStr)
-	if err != nil {
-		t, err = time.Parse("2006-01-02T15:04:05", timeStr)
-		if err != nil {
-			return time.Now()
-		}
-	}
-	return t
-}
-
-func getFormattedTime() string {
-	return time.Now().Format("2006-01-02T15:04:05-07:00")
 }

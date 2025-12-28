@@ -121,12 +121,14 @@ func (s PaymentService) ProcessPurchaseById(ctx context.Context, purchaseId int6
 	if purchase.InvoiceType == database.InvoiceTypeYookasa && s.moynalogClient != nil {
 		slog.Info("attempting to send receipt to Moynalog", "purchase_id", utils.MaskHalfInt64(purchase.ID), "amount", purchase.Amount, "month", purchase.Month)
 		go func() {
-			err := s.sendReceiptToMoynalog(purchase)
+			moynalogCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			err := s.sendReceiptToMoynalog(moynalogCtx, purchase)
 			if err != nil {
 				slog.Error("error sending receipt to Moynalog", "error", err, "purchase_id", utils.MaskHalfInt64(purchase.ID))
 				_, err = s.telegramBot.SendMessage(ctx, &bot.SendMessageParams{
 					ChatID: config.GetAdminTelegramId(),
-					Text:   "Ошибка при отправки чека в Мой налог. Проверье логи.",
+					Text:   "Ошибка при отправке чека в Мой налог. Проверьте логи.",
 				})
 				if err != nil {
 					slog.Error("error while sending moy nalog error message", "error", err, "purchase_id", utils.MaskHalfInt64(purchase.ID))
@@ -462,7 +464,7 @@ func (s PaymentService) createTributeInvoice(ctx context.Context, amount float64
 	return "", purchaseId, nil
 }
 
-func (s PaymentService) sendReceiptToMoynalog(purchase *database.Purchase) error {
+func (s PaymentService) sendReceiptToMoynalog(ctx context.Context, purchase *database.Purchase) error {
 	if s.moynalogClient == nil {
 		return fmt.Errorf("moynalog client not initialized")
 	}
@@ -479,7 +481,7 @@ func (s PaymentService) sendReceiptToMoynalog(purchase *database.Purchase) error
 	comment := fmt.Sprintf("Подписка на %d %s", purchase.Month, monthString)
 	amount := purchase.Amount
 
-	_, err := s.moynalogClient.CreateIncome(amount, comment)
+	_, err := s.moynalogClient.CreateIncome(ctx, amount, comment)
 	if err != nil {
 		return fmt.Errorf("failed to create income in Moynalog: %w", err)
 	}
