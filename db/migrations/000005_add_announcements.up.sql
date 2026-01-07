@@ -1,0 +1,1 @@
+-- This migration was removed. Tables announcement and announcement_delivery are deprecated.
