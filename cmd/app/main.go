@@ -14,6 +14,7 @@ import (
 	"remnawave-tg-shop-bot/internal/cryptopay"
 	"remnawave-tg-shop-bot/internal/database"
 	"remnawave-tg-shop-bot/internal/handler"
+	"remnawave-tg-shop-bot/internal/moynalog"
 	"remnawave-tg-shop-bot/internal/notification"
 	"remnawave-tg-shop-bot/internal/payment"
 	"remnawave-tg-shop-bot/internal/remnawave"
@@ -44,6 +45,18 @@ func main() {
 	config.InitConfig()
 	slog.Info("Application starting", "version", Version, "commit", Commit, "buildDate", BuildDate)
 
+	// Check if Moynalog is enabled
+	var moynalogClient *moynalog.Client
+	if config.IsMoynalogEnabled() {
+		var err error
+		moynalogClient, err = moynalog.NewClient(config.MoynalogUrl(), config.MoynalogUsername(), config.MoynalogPassword())
+		if err != nil {
+			log.Fatalf("Moynalog initialization error: %v", err)
+		}
+
+		slog.Info("Moynalog authentication successful")
+	}
+
 	tm := translation.GetInstance()
 	err := tm.InitTranslations("./translations", config.DefaultLanguage())
 	if err != nil {
@@ -73,7 +86,7 @@ func main() {
 		panic(err)
 	}
 
-	paymentService := payment.NewPaymentService(tm, purchaseRepository, remnawaveClient, customerRepository, b, cryptoPayClient, yookasaClient, referralRepository, cache)
+	paymentService := payment.NewPaymentService(tm, purchaseRepository, remnawaveClient, customerRepository, b, cryptoPayClient, yookasaClient, referralRepository, cache, moynalogClient)
 
 	cronScheduler := setupInvoiceChecker(purchaseRepository, cryptoPayClient, paymentService, yookasaClient)
 	if cronScheduler != nil {
@@ -104,19 +117,20 @@ func main() {
 		},
 	})
 
-	if err != nil {
-		panic(err)
-	}
+	// Set bot commands for Russian
 	_, err = b.SetMyCommands(ctx, &bot.SetMyCommandsParams{
 		Commands: []models.BotCommand{
 			{Command: "start", Description: "Начать работу с ботом"},
+			{Command: "connect", Description: "Подключиться"},
 		},
 		LanguageCode: "ru",
 	})
 
+	// Set bot commands for English
 	_, err = b.SetMyCommands(ctx, &bot.SetMyCommandsParams{
 		Commands: []models.BotCommand{
 			{Command: "start", Description: "Start using the bot"},
+			{Command: "connect", Description: "Connect"},
 		},
 		LanguageCode: "en",
 	})
@@ -403,6 +417,7 @@ func checkCryptoPayInvoice(
 
 		}
 	}
+
 }
 
 func setupAnnouncementCleanup(announcementService *announcement.AnnouncementService) *cron.Cron {
